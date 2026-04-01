@@ -189,7 +189,7 @@ dns_watch_reset_burst() {
 # Intro: immediate first notification in a burst.
 dns_watch_send_intro() {
     local domain="$1" caller="$2" svc_key="$3" kind="$4"
-    local body svc_phrase title="[$PROJECT_NAME] Access Denied"
+    local body svc_phrase title
 
     if [[ -z "${caller:-}" || "$svc_key" == "unknown" ]]; then
         svc_phrase="an unknown caller"
@@ -198,9 +198,11 @@ dns_watch_send_intro() {
     fi
 
     if [[ "$kind" == "servfail" ]]; then
-        body="Detected a DNS resolution error for '${domain}' from ${svc_phrase}."
+        title="⚠️ [$PROJECT_NAME] DNS error"
+        body="⚠️ DNS lookup failed for '${domain}' — source: ${svc_phrase}."
     else
-        body="Detected a denied request for '${domain}' from ${svc_phrase}."
+        title="🚨 [$PROJECT_NAME] Access Denied"
+        body="🚨 Attention! Attempt to access to '${domain}' — source: ${svc_phrase}."
     fi
 
     if ((${#body} > 320)); then
@@ -214,7 +216,7 @@ dns_watch_send_intro() {
 # One toast summarizing queued hosts counts; clears the queue but keeps the episode
 # active until idle reset (so we don't spam repeated intro toasts).
 dns_watch_flush_followup_digest() {
-    local title="[$PROJECT_NAME] Access Denied"
+    local title="📋 [$PROJECT_NAME] Access Denied"
     local digest_sec now
 
     digest_sec="${DNS_FILTER_NOTIFY_BATCH_SEC:-60}"
@@ -292,7 +294,7 @@ dns_watch_flush_followup_digest() {
         segments+=("${seg_prefix}: ${seg_csv}")
     done
 
-    local body="Further denied requests (queued last ${digest_sec}s): ${segments[*]}"
+    local body="📊 Summary (last ${digest_sec}s): further blocked lookups — ${segments[*]}"
     if ((${#body} > 320)); then
         body="${body:0:317}…"
     fi
@@ -390,8 +392,8 @@ dns_watch_notify_global_cap_once() {
     ((max <= 0 || win <= 0)) && return 0
     ((_dns_watch_global_cap_warned)) && return 0
     _dns_watch_global_cap_warned=1
-    local title="[$PROJECT_NAME] Access Denied"
-    local body="Global desktop notify limit reached (${max} per ${win}s). Further DNS alerts are suppressed until the window opens."
+    local title="🔕 [$PROJECT_NAME] Alerts suppressed"
+    local body="🔕 Desktop notify cap hit (${max} per ${win}s). ⏳ DNS filter toasts pause until this window resets."
     if ((${#body} > 320)); then
         body="${body:0:317}…"
     fi
