@@ -10,6 +10,11 @@ path = "src/lib.rs"
 name = "api-rust"
 path = "src/main.rs"
 
+# Integration tests live under `test/` (not Cargo’s default `tests/`).
+[[test]]
+name = "smoke"
+path = "test/smoke.rs"
+
 [dependencies]
 axum = { version = "0.8.4", features = ["macros", "json"] }
 chrono = { version = "0.4.41", features = ["serde"] }
