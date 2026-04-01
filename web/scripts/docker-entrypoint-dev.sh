@@ -11,7 +11,7 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 if [ ! -d node_modules/next ]; then
-  echo "web-dev: node_modules is empty — run the deps workflow (e.g. compose profile 'deps') to install, then restart web-dev." >&2
+  echo "web-dev: node_modules is empty — run \`just web-deps install --frozen-lockfile\` (or \`add <pkg>\`) on the host tree, then restart this service." >&2
   exit 1
 fi
 

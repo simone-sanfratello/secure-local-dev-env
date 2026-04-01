@@ -296,10 +296,8 @@ services:
     ports:
       - "4001:4001"
     volumes:
-      # Source + manifests from host; only `target/` and cargo cache use named volumes.
-      - ./api-rust/src:/app/src
-      - api_rust_dev_target:/app/target
-      # Registry cache must be rw: `cargo watch` / metadata may fetch new crates after lockfile changes.
+      # Full tree matches `api-rust-deps` (manifests, lockfile, `target/` on host). Registry stays on a named volume for speed.
+      - ./api-rust:/app
       - api_rust_dev_cargo_registry:/usr/local/cargo/registry
     env_file:
       - api-rust/.env
@@ -337,7 +335,7 @@ services:
       - "4002:4002"
     volumes:
       - ./api-node:/app
-      - api_node_dev_node_modules:/app/node_modules
+      # node_modules comes from the bind-mounted tree (same as `api-node-deps`); a named volume here hid host installs.
       # Shared pnpm store: repo `/.pnpm-store` -> `/.pnpm-store` (matches `store-dir=../.pnpm-store` in package .npmrc).
       - ./.pnpm-store:/.pnpm-store
     env_file:
@@ -372,7 +370,7 @@ services:
       - "3001:3001"
     volumes:
       - ./web:/app
-      - web_dev_node_modules:/app/node_modules
+      # node_modules from bind-mounted tree (same as `web-deps`); a named volume here hid host installs.
       - web_dev_next:/app/.next
       # Shared pnpm store (same host path as api-node-*).
       - ./.pnpm-store:/.pnpm-store
@@ -563,8 +561,5 @@ services:
 
 volumes:
   storage-main-data:
-  api_rust_dev_target:
   api_rust_dev_cargo_registry:
-  api_node_dev_node_modules:
-  web_dev_node_modules:
   web_dev_next:

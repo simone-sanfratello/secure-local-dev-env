@@ -3,11 +3,10 @@
 set -eu
 cd /app
 
-# Named volumes (target dir, cargo registry) may have been created as root by a previous image/version.
-# Fix once on container boot, then drop privileges to the unprivileged dev user.
+# `target/` is on the bind-mounted host tree; only the cargo registry uses a named volume (may be root-owned).
 if [ "$(id -u)" = "0" ]; then
-  mkdir -p /app/target /usr/local/cargo/registry
-  chown -R app:app /app /usr/local/cargo/registry
+  mkdir -p /usr/local/cargo/registry
+  chown -R app:app /usr/local/cargo/registry
 fi
 
 # Bump mtimes on mounted sources so the first cargo run rebuilds this crate (image may only warm deps).

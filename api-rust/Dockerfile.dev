@@ -12,15 +12,12 @@ RUN apt-get update \
 RUN cargo install cargo-watch
 
 # Switch to a non-root user for the dev process.
-# If named volumes (`api_rust_dev_target`, `api_rust_dev_cargo_registry`) were
-# created previously as root, you may need to recreate them to fix ownership.
+# If the cargo registry volume was created as root, recreate or chown; see docker-entrypoint-dev.sh.
 RUN groupadd -g 1000 app || true \
   && useradd -u 1000 -g 1000 -m -s /bin/sh app || true \
   && chown -R app:app /app
 
-# Warm dependency build in the image layer. A stub `main` compiles all deps into `target/`; then
-# `cargo clean -p api-rust` drops only this crate's artifacts so the named volume is not seeded
-# with a no-op `api-rust` binary (see docker-compose `api_rust_dev_target`).
+# Warm dependency build in the image layer. Dev bind-mounts the full host tree, including `target/`.
 COPY api-rust/Cargo.toml api-rust/Cargo.lock ./
 
 # TODO download binaries only
@@ -39,6 +36,6 @@ ENV APP_PORT=${APP_PORT}
 EXPOSE ${APP_PORT}
 
 # PID 1 forwards SIGTERM/SIGINT to cargo-watch and its children (clean Docker stop).
-# Start as root so we can fix ownership of named volumes on boot, then drop to `app`.
+# Start as root so we can fix registry volume ownership on boot, then drop to `app`.
 USER root
 ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/docker-entrypoint-dev.sh"]

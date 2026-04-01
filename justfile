@@ -11,11 +11,16 @@ secrets:
     bash local-env/write-app-secret-envs.sh
 
 # Stop Compose project and remove volumes (destructive: DB data, named volumes).
-reset:
-    cd "{{justfile_directory()}}" && docker compose down -v
+clean:
+    cd "{{justfile_directory()}}" && docker compose --profile dev --profile test --profile deps --profile full down -v --remove-orphans
 
 fix:
     cd "{{justfile_directory()}}" && docker compose up --build --force-recreate --remove-orphans
+
+deps:
+    just web-deps install --no-frozen-lockfile
+    just api-node-deps install --no-frozen-lockfile
+    just api-rust-deps install
 
 dev:
     bash "{{justfile_directory()}}/local-env/deps/ensure-pnpm-store-writable.sh" "{{justfile_directory()}}"
@@ -62,7 +67,7 @@ api-node-deps *args:
     bash "{{justfile_directory()}}/local-env/deps/ensure-pnpm-store-writable.sh" "{{justfile_directory()}}"
     cd "{{justfile_directory()}}" && docker compose --profile deps run --rm --build --user "$(id -u):$(id -g)" api-node-deps {{args}}
 
-# api-node dev sandboxed in Docker with hot reload (bind-mount api-node/ + node_modules volume)
+# api-node dev sandboxed in Docker with hot reload (bind-mount api-node/ including node_modules)
 api-node-dev:
     bash "{{justfile_directory()}}/local-env/deps/ensure-pnpm-store-writable.sh" "{{justfile_directory()}}"
     cd "{{justfile_directory()}}" && docker compose --profile dev up --build api-node-dev

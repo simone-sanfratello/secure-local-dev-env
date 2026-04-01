@@ -11,7 +11,8 @@ Commands:
   add           cargo add <crate|flags>...
   remove | rm   cargo remove <crate>...
   update        cargo update [crate|flags]...
-  install       cargo install <binary-crate>...  (installs under the container's CARGO_HOME; mount it to keep binaries, or use only for ephemeral tooling)
+  install       cargo fetch  (sync deps for this crate from Cargo.lock)
+  bin-install   cargo install <binary-crate|flags>... (installs under the container's CARGO_HOME; mount it to keep binaries, or use only for ephemeral tooling)
 
 Examples (from repo root):
   docker compose --profile deps run --rm --build --user "$(id -u):$(id -g)" api-rust-deps add serde --features derive
@@ -38,6 +39,9 @@ case "$cmd" in
     exec cargo update "$@"
     ;;
   install)
+    exec cargo fetch
+    ;;
+  bin-install)
     exec cargo install "$@"
     ;;
   help | --help | -h | "")
