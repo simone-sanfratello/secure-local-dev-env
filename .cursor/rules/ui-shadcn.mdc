@@ -1,0 +1,18 @@
+---
+description: shadcn/ui, Tailwind CSS, Radix primitives, and icons for B2C UI
+globs: web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# UI (shadcn/ui)
+
+- Use **shadcn/ui** (Radix + Tailwind) for interactive UI; components live in `components/ui/` as project source—customize there instead of forking upstream blindly.
+- **Icons**: **`lucide-react`** as the default set; avoid mixing multiple icon libraries.
+- **Theming**: CSS variables in `globals.css` + `tailwind.config`; use **`next-themes`** for class-based light/dark when the app supports it.
+- **New primitives**: add via the official CLI (`npx shadcn@latest add …`) so structure and deps stay consistent.
+- **Density**: comfortable touch targets for mobile/PWA (min ~44px for primary actions); use spacing tokens, not ad hoc pixels.
+- **Accessibility**: Radix handles much of focus/keyboard; still wire labels, `aria-*`, and visible focus rings (`ring-*`).
+
+```tsx
+// Prefer shadcn Button, Input, Dialog, etc.; compose with cn() from @/lib/utils
+```

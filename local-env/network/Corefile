@@ -1,0 +1,55 @@
+# CoreDNS: whitelist external zones + Docker Compose service names.
+# Apps using this resolver set Compose `dns: ["172.28.0.53"]` on `dev-internal`.
+#
+# `compose_services`: keep in sync with `docker-compose.yml` service keys (trailing dot in names).
+#
+# Add whitelist zones with `zonename:53 { forward . 8.8.8.8 8.8.4.4 }`.
+# The `log` plugin writes queries to process stdout — save with:
+#   docker compose logs dns-filter 2>&1 | tee logs/dns-queries.log
+
+openai.com:53 {
+    log
+    errors
+    forward . 8.8.8.8 8.8.4.4
+}
+
+npmjs.org:53 {
+    log
+    errors
+    forward . 8.8.8.8 8.8.4.4
+}
+
+crates.io:53 {
+    log
+    errors
+    forward . 8.8.8.8 8.8.4.4
+}
+
+github.com:53 {
+    log
+    errors
+    forward . 8.8.8.8 8.8.4.4
+}
+
+# Compose service discovery -> Docker embedded resolver (127.0.0.11).
+# Keep in sync with `docker-compose.yml` service keys (hyphenated + trailing dot).
+.:53 {
+    view compose_services {
+        expr name() in ['api-node-deps.', 'api-node-dev.', 'api-node-test.', 'api-node.', 'api-rust-deps.', 'api-rust-dev.', 'api-rust-test.', 'api-rust.', 'dns-filter.', 'storage-cache.', 'storage-main.', 'storage-migrate.', 'storage-test.', 'web-deps.', 'web-dev.', 'web-test.', 'web.']
+    }
+    log
+    errors
+    forward . 127.0.0.11
+}
+
+# Deny other names under root (non-whitelisted FQDNs)
+.:53 {
+    log
+    errors
+    template IN A {
+        rcode NXDOMAIN
+    }
+    template IN AAAA {
+        rcode NXDOMAIN
+    }
+}

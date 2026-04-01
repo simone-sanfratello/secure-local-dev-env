@@ -1,0 +1,14 @@
+---
+description: B2C SaaS UX patterns—onboarding, trust, empty states, mobile-first
+globs: web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# UX (B2C daily-use)
+
+- **Mobile-first**: primary flows must work one-handed on narrow viewports; defer desktop-only enhancements.
+- **Onboarding**: shortest path to first success; show progress; allow skip where safe.
+- **Trust**: clear pricing, privacy, and data use; explicit consent for sensitive actions.
+- **Empty & error states**: every list/dashboard needs helpful empty copy + one primary action; errors are actionable (retry, contact, fix input).
+- **Performance perception**: skeletons or optimistic UI for slow network; avoid blocking full page on minor updates.
+- **Notifications**: prefer in-app toasts/banners; push only when value is high (PWA).

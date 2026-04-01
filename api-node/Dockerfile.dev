@@ -1,0 +1,27 @@
+# Node.js 24.14.1
+FROM node:24.14.1-bookworm-slim@sha256:06e5c9f86bfa0aaa7163cf37a5eaa8805f16b9acb48e3f85645b09d459fc2a9f
+WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends dumb-init \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
+
+COPY api-node/package.json api-node/pnpm-lock.yaml api-node/pnpm-workspace.yaml api-node/.npmrc ./
+RUN corepack prepare pnpm@10.33.0 --activate \
+  && pnpm install --frozen-lockfile
+
+# Defense-in-depth: ensure runtime deps aren't writable by the dev process.
+RUN chmod -R a-w node_modules || true
+
+COPY api-node/scripts/docker-entrypoint-dev.sh /usr/local/bin/docker-entrypoint-dev.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-dev.sh
+
+ARG APP_PORT=4002
+ENV APP_PORT=${APP_PORT}
+EXPOSE ${APP_PORT}
+
+# Ensure runtime runs as non-root. Avoid `chown -R` here: it can traverse huge `node_modules`
+# trees and stall image builds for minutes.
+RUN chown -R node:node /app || true
+USER node
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/docker-entrypoint-dev.sh"]

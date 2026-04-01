@@ -1,0 +1,12 @@
+# Test: migration files present + `migrate version` when DATABASE_URL is set (via Compose).
+# Build from repo root: docker build -f storage/Dockerfile.test .
+# syntax=docker/dockerfile:1
+FROM migrate/migrate:v4.19.1@sha256:cc4ad8e19d66791e3689405d9a028ce6e9614f32032db14acda1469f7201d6e4
+
+COPY storage/migrations /migrations
+COPY local-env/storage/test-entrypoint.sh /test-entrypoint.sh
+RUN chmod +x /test-entrypoint.sh
+
+ENV DATABASE_URL=""
+
+ENTRYPOINT ["/test-entrypoint.sh"]

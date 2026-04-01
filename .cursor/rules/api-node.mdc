@@ -1,0 +1,30 @@
+---
+description: api-node — Fastify + Postgres service; Node 24.14.1, pnpm, TypeScript without tsx
+alwaysApply: false
+---
+
+# api-node (`api-node/`)
+
+## Runtime
+
+- **Node.js `24.14.1` only** (match root **`.node-version`** and **`engines.node`**). No widened ranges.
+- **Run the app with the `node` binary only** — do **not** add **`tsx`**, **`ts-node`**, or other TS runners for production or default tooling.
+- **Production / Docker**: compile with **`pnpm run build`** (`tsc`), then **`pnpm start`** → **`node dist/main.js`**.
+- **Local dev**: **`pnpm run dev`** uses **`node --watch`** on **`src/main.ts`** so TypeScript is edited in `src/` without a separate runner package; production must still use emitted **`dist/`**.
+
+## Package manager
+
+- **`pnpm` only** (exact version per root **`packageManager`** / **`engines.pnpm`**). Align **`api-node/.npmrc`** with **`engine-strict=true`** and **`save-exact=true`**.
+
+## TypeScript / modules
+
+- **`"type": "module"`** (ESM). Relative imports in **`src/`** use **`.js` extensions** (e.g. `./config.js`) for **`NodeNext`** resolution and **`tsc` output**.
+- **`tsconfig.json`**: emit to **`dist/`**; **`src/`** is source; **`dist/`** is gitignored.
+
+## Stack
+
+- HTTP: **Fastify** + **`@fastify/cors`**. DB: **`postgres`** (porsager), not **`pg`**.
+
+## Docker
+
+- Production image **multi-stage**: install all deps (incl. `typescript`) in **builder**, **`pnpm run build`**, runtime stage **`pnpm install --prod`** + copy **`dist/`**; **`CMD`** is **`node dist/main.js`** (with **`dumb-init`** as in **`api-node/Dockerfile`**).

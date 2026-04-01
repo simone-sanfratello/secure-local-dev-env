@@ -1,0 +1,14 @@
+# Test: compile-check Rust API. Build from repo root: docker build -f api-rust/Dockerfile.test .
+# Rust 1.94.1 (matches api-rust/Dockerfile)
+FROM rust:1.94.1-bookworm@sha256:fdb91abf3cb33f1ebc84a76461d2472fd8cf606df69c181050fa7474bade2895
+WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends dumb-init \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY api-rust/Cargo.toml api-rust/Cargo.lock ./
+COPY api-rust/src ./src
+COPY api-rust/test ./test
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["cargo", "test"]

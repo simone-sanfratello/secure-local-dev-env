@@ -1,0 +1,50 @@
+---
+description: Application security—auth, secrets, dependencies, web hardening, API and container baseline
+alwaysApply: true
+---
+
+# Security
+
+## Node.js and package manager (repo root, `web/`, `test/`)
+
+- **Node.js `24.14.1` only** for JS packages: match **`.node-version`**, root/`web`/`test` **`package.json` `engines.node`**, and **`web/Dockerfile`** base image tag. Do not widen ranges (e.g. `>=22`); bump the pin deliberately when upgrading Node.
+- **pnpm `10.33.0` only** (see **`packageManager`** and **`engines.pnpm`**). Enable with **`corepack enable`** and **`corepack prepare pnpm@10.33.0 --activate`** where needed.
+- **Never use `npm` or `yarn`** to install or add dependencies in this repo—only **`pnpm`** (`pnpm install`, `pnpm add`, `pnpm install --frozen-lockfile` in CI). Do not commit `package-lock.json` or `yarn.lock`.
+- **`.npmrc`** at root, `web/`, and `test/` must keep **`engine-strict=true`** so installs fail on version skew.
+
+## Dependencies and supply chain (`web/`, `test/`)
+
+- Commit **`pnpm-lock.yaml`** per package; CI uses **`pnpm install --frozen-lockfile`**.
+- Keep **exact** versions in `package.json` (**`save-exact=true`**); bump with review and changelog/advisories.
+- Run **`pnpm audit`** after dependency changes; patch **high/critical** or document accepted risk in **`docs/`** or an ADR.
+- Review **postinstall / build scripts** from new deps; align with **`pnpm.onlyBuiltDependencies`** when tightening supply chain.
+- Deeper lockfile / audit / CI patterns: **`supply-chain-security`** skill.
+
+## Secrets and configuration
+
+- No API keys, tokens, or DB passwords in client bundles, logs, or committed files. Use env + secret stores (Docker, CI, or your host’s secret manager).
+- In **`api-rust`** and **`api-node`**, load secrets from environment variables (typically from local **`.env`**) and require non-empty values; avoid `_FILE` and `/run/secrets` fallbacks in app config.
+- Treat **all** user and query input as untrusted until validated on **each API service** (**`api-rust`**, **`api-node`**).
+
+## Web (Next.js)
+
+- Prefer **secure headers** (CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`) at the edge or in Next config/middleware as the stack matures.
+- Avoid **`dangerouslySetInnerHTML`** with untrusted content; sanitize if unavoidable.
+- **Cookies**: `HttpOnly`, `Secure`, `SameSite` appropriate to auth model; CSRF protection for cookie-based sessions.
+
+## APIs (`api-rust`, `api-node`)
+
+- Authenticate and authorize on the server for every sensitive action; do not rely on obscurity or client-only checks.
+- Parameterized SQL only; constant-time comparison for secrets where applicable.
+
+## Local development (sandbox)
+
+- **Always run dev app processes through a sandbox** so dependency supply-chain and build tooling (install scripts, postinstall, native addons, Rust proc-macros) run under **resource limits** and **filesystem isolation**—not unlimited on the host.
+- **`just dev`**: runs the full stack in Docker (Compose profile **`dev`**) with bind-mounts for hot reload: **`api-rust-dev`** (cargo watch), **`api-node-dev`** (Node watch), and **`web-dev`** (Next.js Turbopack). Logs are mixed.
+- **`just web-dev`**, **`just api-rust-dev`**, and **`just api-node-dev`**: individual services in Docker (same profile).
+- Avoid raw **`pnpm dev`** or **`cargo watch`** on the host for day-to-day work; use the Docker recipes.
+
+## Infrastructure
+
+- Run containers as **non-root** where possible; minimal base images; scan images in CI when available.
+- Restrict production network exposure (egress/ingress) to what each workload needs; document exceptions.

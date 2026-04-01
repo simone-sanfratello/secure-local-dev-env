@@ -1,0 +1,31 @@
+---
+description: Monorepo layout, stack boundaries, and shared conventions for myproject
+alwaysApply: true
+---
+
+# Project core
+
+## Layout (target)
+
+- **Repo root** — `package.json` + **Husky** + **commitlint** (Conventional Commits); **`justfile`** (**[just](https://github.com/casey/just)**) for standard tasks (`just` to list). Run `pnpm install` at root once Git is initialized so hooks apply. **Git**: trunk **`main`** only; short-lived **`feat/`** / **`fix/`** branches; rebase onto `main` before merge; **squash** to `main` (see **`git-branching`** rule, **`git-branching-workflow`** skill)
+- `web/` — Next.js (TypeScript), PWA, shadcn/ui + Tailwind, B2C UI; **Node.js 24.14.1** (see `.node-version`), **pnpm** (exact versions, `pnpm-lock.yaml`)
+- `api-rust/` — Rust HTTP API (Axum), auth, domain logic, **PostgreSQL**
+- `api-node/` — Node HTTP API (Fastify), TypeScript (`tsc` → `node`), **PostgreSQL**
+- `storage/` — PostgreSQL **migrations** (golang-migrate SQL); see **`database`** rule and **`database-postgres`** skill
+- `docker-compose.yml` — local stack: Postgres, Redis, **api-rust**, **api-node**, web
+- `docs/` — developer/operator documentation (see **documentation** rule and skill)
+- `local-env/` — shared shell entrypoints and local environment tooling (e.g. `local-env/deps/`, `local-env/network/`, `local-env/notification/`, `local-env/storage/`); see **`scripts-location`** rule
+- `test/` — optional **`pnpm`** workspace for additional automated checks (`pnpm` from **`test/`** when used)
+
+Frontend talks to **api-rust** and/or **api-node** via versioned JSON APIs (`/api/v1/...`). No business rules duplicated in the client that must stay authoritative on the server.
+
+## AI-assisted development
+
+- Prefer explicit types, small modules, and conventional file names so tools can navigate the codebase.
+- After non-trivial changes, run formatters/linters and the relevant tests before considering work done.
+
+## Security baseline
+
+- Follow the **security** project rule and **`application-security`** / **`supply-chain-security`** skills (deps, lockfiles, secrets, web/API hardening).
+- Never log secrets or PII; use structured errors on the server, safe messages on the client.
+- Validate all input at the API boundary (**api-rust**: Rust types + validation crate; **api-node**: validated DTOs / schemas per that service).

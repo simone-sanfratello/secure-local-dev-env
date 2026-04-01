@@ -1,0 +1,15 @@
+# One-off dependency changes inside Docker (isolated tooling; mutates bind-mounted api-rust/ on the host).
+# Compose: service `api-rust-deps` (profile `deps`). Or from repo root:
+#   docker compose --profile deps run --rm --build --user "$(id -u):$(id -g)" api-rust-deps add serde --features derive
+# Or: just api-rust-deps add serde
+# Rust 1.94.1 (matches Dockerfile.dev)
+FROM rust:1.94.1-bookworm@sha256:fdb91abf3cb33f1ebc84a76461d2472fd8cf606df69c181050fa7474bade2895
+WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends dumb-init pkg-config libssl-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY local-env/deps/cargo-entrypoint.sh /usr/local/bin/deps-entrypoint.sh
+RUN chmod +x /usr/local/bin/deps-entrypoint.sh
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/deps-entrypoint.sh"]

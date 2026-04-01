@@ -1,0 +1,20 @@
+---
+description: Next.js App Router, TypeScript, and React patterns for web/
+globs: web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend (Next.js)
+
+- Use the **App Router** (`app/`), Server Components by default; add `"use client"` only when needed (hooks, browser APIs, shadcn/Radix interactivity, `next-themes` provider).
+- **TypeScript strict**; no `any` unless justified in a one-line comment.
+- **Package manager**: **pnpm `10.33.0` only**—no **`npm`** or **`yarn`** for installs (`web/pnpm-lock.yaml`). **Node.js `24.14.1` only** (`.node-version`, `engines.node`, Docker base image); exact pins, no ranges. **`.npmrc`**: `save-exact` + **`engine-strict=true`**. Commands: `pnpm install`; CI: `pnpm install --frozen-lockfile`.
+- **Lint / format**: **Biome** (`biome.json`) — `pnpm run lint` (check) / `pnpm run format` (`biome check --write`).
+- **Data fetching**: prefer server-side fetch to the Rust API for initial loads; use client hooks for interactive flows. Centralize API base URL in env (`NEXT_PUBLIC_API_URL`).
+- **PWA**: keep `manifest`, icons, and service worker strategy in one place (e.g. `next-pwa` / Serwist — follow chosen package docs). Test installability on Android Chrome.
+- **Routing**: use `loading.tsx` and `error.tsx` where it improves UX; colocate feature modules under `app/` or `features/`.
+
+```tsx
+// Prefer named exports for components; keep page.tsx thin
+export function PricingCard() { /* ... */ }
+```

@@ -1,0 +1,25 @@
+---
+description: Where and how to write developer and operator documentation
+globs: "**/*.md"
+alwaysApply: false
+---
+
+# Documentation
+
+## Placement
+
+- **`docs/`** — architecture notes, ADRs, runbooks, deep guides (stable, linkable).
+- **Root `README.md`** — clone-to-running quickstart, links into `docs/` for detail.
+- **Package readmes** (`web/README.md`, `api-rust/README.md`, `api-node/README.md`) — only when setup or commands differ per package; avoid duplicating the root README.
+
+## Content
+
+- **Audience**: state it (contributor, operator, security reviewer). Write steps that match the repo (**`pnpm`** / **`just`**, `docker compose`—not `npm install` for this monorepo).
+- **Accuracy**: update docs in the **same change** as behavior, flags, env vars, or ports when the user expects docs to stay current.
+- **Security**: never paste real secrets, tokens, or production URLs; use placeholders and point to secret stores.
+- **Style**: clear headings, short paragraphs, fenced code blocks with language tags; prefer examples over abstract prose.
+
+## Code vs docs
+
+- Use **`///` / doc comments** for public Rust APIs and complex TypeScript utilities—not for restating obvious line-by-line logic.
+- **ADRs** (`docs/adr/NNNN-title.md`): context, decision, consequences—keep to one decision per file.

@@ -1,0 +1,10 @@
+# Build context when using repository root (see docker-compose: storage-*, web-dev, api-rust-dev).
+.git
+.cursor
+node_modules
+**/node_modules
+web/.next
+**/.pnpm-store
+docs
+test
+Dockerfile*

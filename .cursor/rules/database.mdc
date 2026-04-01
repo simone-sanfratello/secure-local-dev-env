@@ -1,0 +1,30 @@
+---
+description: PostgreSQL modeling, indexing, and versioned migrations for storage
+globs: storage/**/*.sql
+alwaysApply: false
+---
+
+# Database (PostgreSQL)
+
+## Scope
+
+- **Migrations** live under `storage/migrations/` and run via **golang-migrate** (see `storage/Dockerfile.migration`). Use paired **`NNN_description.up.sql`** and **`NNN_description.down.sql`**; **never change** files after they have been applied in any shared environment.
+- **App access** is through the Rust API only; schema must match what services query.
+
+## Modeling
+
+- Prefer **clear ownership**: explicit **`PRIMARY KEY`**, **`FOREIGN KEY`** with intentional **`ON DELETE` / `ON UPDATE`** (avoid accidental cascades). Use **`NOT NULL`** where the domain requires a value; document optional columns.
+- Use **`timestamptz`** for instants; avoid **`timestamp` without time zone**. Prefer **`bigint`** or **`uuid`** for IDs per existing schema; avoid **`float` / `real`** for money or exact counts.
+- **Normalize** to avoid redundant mutable data; **denormalize** only with a named reason (read path, staleness rules). For multi-tenant data, enforce tenant isolation in the API and consider **Row Level Security** when the product standard requires DB-enforced boundaries.
+
+## Performance
+
+- Index **equality/range filters**, **JOIN keys**, and **ORDER BY** / **DISTINCT** columns that appear in hot queries; prefer **composite indexes** whose column order matches predicate order (leading columns = most selective filters used together).
+- Add **partial indexes** when a subset of rows is queried often. Avoid **low-cardinality-only** indexes that do not match a real access path. Revisit indexes when write volume dominates.
+- Use **`UNIQUE`** constraints where the model requires it; they double as indexes.
+
+## Migrations
+
+- **`up`**: valid, transactional where possible (`BEGIN`/`COMMIT` for multi-step DDL if appropriate). Prefer **additive** changes first; use **expand–contract** (add new column/index → dual-write/read → drop old) for zero-downtime refactors.
+- **`down`**: must **reverse** `up` without losing data that cannot be recreated; if unsafe, document and fail clearly (or split migration).
+- Heavy changes: **create indexes `CONCURRENTLY`** outside long transactions when operating on large tables in production (tooling may require split migration or session modes—follow team runbooks).

@@ -1,0 +1,570 @@
+# `dev-internal`: shared bridge. Every workload uses CoreDNS at 172.28.0.53 except `dns-filter`
+# itself (keeps Docker embedded DNS so the resolver can forward whitelist zones without a loop).
+networks:
+  dev-internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# CPU/memory ceilings for local Compose (docker compose up / run). Five tiers only.
+x-resources-tiny: &resources-tiny
+  deploy:
+    resources:
+      limits:
+        cpus: "0.25"
+        memory: 128M
+
+x-resources-small: &resources-small
+  deploy:
+    resources:
+      limits:
+        cpus: "0.50"
+        memory: 512M
+
+x-resources-medium: &resources-medium
+  deploy:
+    resources:
+      limits:
+        cpus: "1.00"
+        memory: 1536M
+
+x-resources-big: &resources-big
+  deploy:
+    resources:
+      limits:
+        cpus: "1.50"
+        memory: 2G
+
+x-resources-huge: &resources-huge
+  deploy:
+    resources:
+      limits:
+        cpus: "2.00"
+        memory: 4G
+
+# CoreDNS allowlist + Docker service discovery (see local-env/network/Corefile).
+x-dns-filtered: &dns-filtered
+  dns:
+    - 172.28.0.53
+
+services:
+  dns-filter:
+    <<: *resources-tiny
+    image: coredns/coredns:1.11.3@sha256:9caabbf6238b189a65d0d6e6ac138de60d6a1c419e5a341fbbb7c78382559c6e
+    volumes:
+      - ./local-env/network/Corefile:/Corefile:ro
+    command: ["-conf", "/Corefile"]
+    networks:
+      dev-internal:
+        ipv4_address: 172.28.0.53
+    restart: unless-stopped
+
+  # Tails dns-filter logs via Docker socket; desktop alerts on NXDOMAIN/SERVFAIL (Corefile deny / upstream failures).
+  # Enabled for every Compose profile that runs filtered DNS (dev, test, deps, full). Session bus: NOTIFY_DBUS, default /run/user/1000/bus.
+  notify:
+    <<: *resources-tiny
+    profiles:
+      - dev
+      - test
+      - deps
+      - full
+    build:
+      context: .
+      dockerfile: local-env/notification/Dockerfile
+    depends_on:
+      dns-filter:
+        condition: service_started
+    # Host session D-Bus from inside default `docker-default` AppArmor profile gets AccessDenied on org.freedesktop.DBus Hello.
+    security_opt:
+      - apparmor=unconfined
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Writable: session bus needs full socket use; match NOTIFY_DESKTOP_UID (see devops rule).
+      - ${NOTIFY_DBUS:-/run/user/1000/bus}:/run/notify/dbus/bus
+    environment:
+      DBUS_SESSION_BUS_ADDRESS: unix:path=/run/notify/dbus/bus
+      NOTIFY_DESKTOP_UID: ${NOTIFY_DESKTOP_UID:-1000}
+      NOTIFY_DESKTOP_GID: ${NOTIFY_DESKTOP_GID:-1000}
+      # Intro toast immediately; follow-up rows are queued and sent as one digest every N seconds (default 60).
+      DNS_FILTER_NOTIFY_BATCH_SEC: ${DNS_FILTER_NOTIFY_BATCH_SEC:-60}
+      # How often read() wakes to run the flush check (default 1; capped to digest interval).
+      DNS_FILTER_NOTIFY_TICK_SEC: ${DNS_FILTER_NOTIFY_TICK_SEC:-1}
+      DNS_NOTIFY_POLL_SEC: ${DNS_NOTIFY_POLL_SEC:-2}
+      DNS_NOTIFY_SINCE_SEC: ${DNS_NOTIFY_SINCE_SEC:-10}
+      # Rebuild IP → compose service map for CoreDNS client IPs (seconds).
+      DNS_NOTIFY_IP_MAP_SEC: ${DNS_NOTIFY_IP_MAP_SEC:-30}
+      # Optional override; otherwise picked from this container’s dev-internal network attachment.
+      NOTIFY_DOCKER_NETWORK: ${NOTIFY_DOCKER_NETWORK:-}
+      # Hard cap on desktop toasts (each notify-send); rolling window in seconds (default 10 / 5 min).
+      DNS_NOTIFY_GLOBAL_MAX: ${DNS_NOTIFY_GLOBAL_MAX:-10}
+      DNS_NOTIFY_GLOBAL_WINDOW_SEC: ${DNS_NOTIFY_GLOBAL_WINDOW_SEC:-300}
+    networks:
+      - dev-internal
+    restart: unless-stopped
+
+  storage-main:
+    <<: [*resources-medium, *dns-filtered]
+    depends_on:
+      dns-filter:
+        condition: service_started
+    build:
+      context: .
+      dockerfile: storage/Dockerfile
+    environment:
+      POSTGRES_USER: myproject
+      POSTGRES_PASSWORD: myproject
+      POSTGRES_DB: myproject
+    ports:
+      - "5432:5432"
+    volumes:
+      - storage-main-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myproject -d myproject"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dev-internal
+
+  storage-migrate:
+    <<: [*resources-small, *dns-filtered]
+    build:
+      context: .
+      dockerfile: storage/Dockerfile.migration
+    environment:
+      DATABASE_URL: postgres://myproject:myproject@storage-main:5432/myproject?sslmode=disable
+    depends_on:
+      dns-filter:
+        condition: service_started
+      storage-main:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - dev-internal
+
+  storage-cache:
+    <<: [*resources-small, *dns-filtered]
+    depends_on:
+      dns-filter:
+        condition: service_started
+    # Redis 8.6.2 (2026-03-25)
+    image: redis:8.6.2-alpine@sha256:81b6f81d6a6c5b9019231a2e8eb10085e3a139a34f833dcc965a8a959b040b72
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - dev-internal
+
+# --- app ---
+
+  api-rust:
+    <<: [*resources-medium, *dns-filtered]
+    profiles:
+      - full
+    build:
+      context: ./api-rust
+    ports:
+      - "4001:4001"
+    env_file:
+      - api-rust/.env
+    environment:
+      APP_NAME: api-rust
+      APP_PORT: 4001
+      DATABASE_URL: postgres://myproject:myproject@storage-main:5432/myproject?sslmode=disable
+      REDIS_URL: redis://storage-cache:6379/0
+      RUST_LOG: info
+      CORS_ALLOWED_ORIGIN: http://localhost:3001
+      HTTP_HEALTH_PATH: /health
+      HTTP_API_V1_PREFIX: /api/v1
+      OPENAI_BASE_URL: https://api.openai.com
+      OPENAI_MODEL: gpt-4.1-mini
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      storage-migrate:
+        condition: service_completed_successfully
+      storage-cache:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:4001/health | grep -q ok || exit 1",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dev-internal
+
+  api-node:
+    <<: [*resources-medium, *dns-filtered]
+    profiles:
+      - full
+    build:
+      context: ./api-node
+    ports:
+      - "4002:4002"
+    env_file:
+      - api-node/.env
+    environment:
+      APP_NAME: api-node
+      APP_PORT: 4002
+      DATABASE_URL: postgres://myproject:myproject@storage-main:5432/myproject?sslmode=disable
+      CORS_ALLOWED_ORIGIN: http://localhost:3001
+      HTTP_HEALTH_PATH: /health
+      HTTP_API_V1_PREFIX: /api/v1
+      OPENAI_BASE_URL: https://api.openai.com
+      OPENAI_MODEL: gpt-4.1-mini
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      storage-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - dev-internal
+
+  web:
+    <<: [*resources-medium, *dns-filtered]
+    profiles:
+      - full
+    build:
+      context: ./web
+      args:
+        PORT: 3001
+        NEXT_PUBLIC_API_URL: http://localhost:4001
+        NEXT_PUBLIC_API_NODE_URL: http://localhost:4002
+    ports:
+      - "3001:3001"
+    env_file:
+      - web/.env
+    environment:
+      NODE_ENV: production
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      api-rust:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - dev-internal
+
+# --- dev ---
+
+  api-rust-dev:
+    <<: [*resources-huge, *dns-filtered]
+    profiles:
+      - dev
+    build:
+      context: .
+      dockerfile: api-rust/Dockerfile.dev
+    ports:
+      - "4001:4001"
+    volumes:
+      # Source + manifests from host; only `target/` and cargo cache use named volumes.
+      - ./api-rust/src:/app/src
+      - api_rust_dev_target:/app/target
+      # Registry cache must be rw: `cargo watch` / metadata may fetch new crates after lockfile changes.
+      - api_rust_dev_cargo_registry:/usr/local/cargo/registry
+    env_file:
+      - api-rust/.env
+    environment:
+      APP_NAME: api-rust-dev
+      APP_PORT: 4001
+      DATABASE_URL: postgres://myproject:myproject@storage-main:5432/myproject?sslmode=disable
+      REDIS_URL: redis://storage-cache:6379/0
+      RUST_LOG: info
+      CORS_ALLOWED_ORIGIN: http://localhost:3001
+      HTTP_HEALTH_PATH: /health
+      HTTP_API_V1_PREFIX: /api/v1
+      OPENAI_BASE_URL: https://api.openai.com
+      OPENAI_MODEL: gpt-4.1-mini
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      storage-migrate:
+        condition: service_completed_successfully
+      storage-cache:
+        condition: service_healthy
+    networks:
+      - dev-internal
+
+  api-node-dev:
+    <<: [*resources-big, *dns-filtered]
+    profiles:
+      - dev
+    build:
+      context: .
+      dockerfile: api-node/Dockerfile.dev
+    ports:
+      - "4002:4002"
+    volumes:
+      - ./api-node:/app
+      - api_node_dev_node_modules:/app/node_modules
+      # Shared pnpm store: repo `/.pnpm-store` -> `/.pnpm-store` (matches `store-dir=../.pnpm-store` in package .npmrc).
+      - ./.pnpm-store:/.pnpm-store
+    env_file:
+      - api-node/.env
+    environment:
+      APP_NAME: api-node-dev
+      APP_PORT: 4002
+      DATABASE_URL: postgres://myproject:myproject@storage-main:5432/myproject?sslmode=disable
+      CORS_ALLOWED_ORIGIN: http://localhost:3001
+      HTTP_HEALTH_PATH: /health
+      HTTP_API_V1_PREFIX: /api/v1
+      OPENAI_BASE_URL: https://api.openai.com
+      OPENAI_MODEL: gpt-4.1-mini
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      storage-migrate:
+        condition: service_completed_successfully
+    networks:
+      - dev-internal
+
+  web-dev:
+    <<: [*resources-huge, *dns-filtered]
+    profiles:
+      - dev
+    build:
+      context: .
+      dockerfile: web/Dockerfile.dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./web:/app
+      - web_dev_node_modules:/app/node_modules
+      - web_dev_next:/app/.next
+      # Shared pnpm store (same host path as api-node-*).
+      - ./.pnpm-store:/.pnpm-store
+    environment:
+      PORT: 3001
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:4001
+      NEXT_PUBLIC_API_NODE_URL: http://localhost:4002
+      WATCHPACK_POLLING: "true"
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      api-rust-dev:
+        condition: service_started
+      api-node-dev:
+        condition: service_started
+    networks:
+      - dev-internal
+
+# --- deps (one-off pnpm/cargo; bind-mount host app trees — manifests, lockfiles, node_modules, target) ---
+
+  web-deps:
+    <<: [*resources-big, *dns-filtered]
+    profiles:
+      - deps
+    build:
+      context: .
+      dockerfile: web/Dockerfile.deps
+    working_dir: /app
+    volumes:
+      - ./web:/app
+      - ./.pnpm-store:/.pnpm-store
+    environment:
+      # Non-interactive `pnpm install` / purge (no TTY on `compose run`).
+      CI: "true"
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+    networks:
+      - dev-internal
+
+  api-node-deps:
+    <<: [*resources-big, *dns-filtered]
+    profiles:
+      - deps
+    build:
+      context: .
+      dockerfile: api-node/Dockerfile.deps
+    working_dir: /app
+    volumes:
+      - ./api-node:/app
+      - ./.pnpm-store:/.pnpm-store
+    environment:
+      CI: "true"
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+    networks:
+      - dev-internal
+
+  api-rust-deps:
+    <<: [*resources-huge, *dns-filtered]
+    profiles:
+      - deps
+    build:
+      context: .
+      dockerfile: api-rust/Dockerfile.deps
+    working_dir: /app
+    volumes:
+      - ./api-rust:/app
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+    networks:
+      - dev-internal
+
+# --- app tests in Docker (profile `test` — see Dockerfile.test per app, `just test`) ---
+
+  web-test:
+    <<: [*resources-medium, *dns-filtered]
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: web/Dockerfile.test
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+    networks:
+      - dev-internal
+    restart: "no"
+
+  api-node-test:
+    <<: [*resources-medium, *dns-filtered]
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: api-node/Dockerfile.test
+    environment:
+      APP_NAME: api-node-test
+      APP_PORT: "4002"
+      DATABASE_URL: postgres://myproject:myproject@storage-main:5432/myproject?sslmode=disable
+      CORS_ALLOWED_ORIGIN: http://localhost:3001
+      HTTP_HEALTH_PATH: /health
+      HTTP_API_V1_PREFIX: /api/v1
+      OPENAI_BASE_URL: https://api.openai.com
+      OPENAI_MODEL: gpt-4.1-mini
+      # Required by loadConfig; tests do not call OpenAI.
+      OPENAI_API_KEY: test-key-not-used-in-smoke
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      storage-main:
+        condition: service_healthy
+      storage-migrate:
+        condition: service_completed_successfully
+    networks:
+      - dev-internal
+    restart: "no"
+
+  api-rust-test:
+    <<: [*resources-medium, *dns-filtered]
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: api-rust/Dockerfile.test
+    environment:
+      APP_NAME: api-rust-test
+      APP_PORT: "4001"
+      DATABASE_URL: postgres://myproject:myproject@storage-main:5432/myproject?sslmode=disable
+      REDIS_URL: redis://storage-cache:6379/0
+      CORS_ALLOWED_ORIGIN: http://localhost:3001
+      HTTP_HEALTH_PATH: /health
+      HTTP_API_V1_PREFIX: /api/v1
+      OPENAI_BASE_URL: https://api.openai.com
+      OPENAI_MODEL: gpt-4.1-mini
+      OPENAI_API_KEY: test-key-not-used-in-smoke
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      storage-main:
+        condition: service_healthy
+      storage-migrate:
+        condition: service_completed_successfully
+      storage-cache:
+        condition: service_healthy
+    networks:
+      - dev-internal
+    restart: "no"
+
+  storage-test:
+    <<: [*resources-medium, *dns-filtered]
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: storage/Dockerfile.test
+    environment:
+      DATABASE_URL: postgres://myproject:myproject@storage-main:5432/myproject?sslmode=disable
+    depends_on:
+      dns-filter:
+        condition: service_started
+      notify:
+        condition: service_started
+      storage-main:
+        condition: service_healthy
+      storage-migrate:
+        condition: service_completed_successfully
+    networks:
+      - dev-internal
+    restart: "no"
+
+volumes:
+  storage-main-data:
+  api_rust_dev_target:
+  api_rust_dev_cargo_registry:
+  api_node_dev_node_modules:
+  web_dev_node_modules:
+  web_dev_next:

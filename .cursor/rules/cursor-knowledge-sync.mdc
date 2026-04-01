@@ -1,0 +1,21 @@
+---
+description: When prompts change stack or conventions, update project rules and skills in the same change set
+alwaysApply: true
+---
+
+# Rules and skills sync
+
+When a user prompt **establishes or changes** durable project knowledge—stack, tooling, file layout, conventions, workflows, security, **Node.js / pnpm version pins**, testing, DevOps, UX/UI standards, **security posture**, or **documentation structure**—**update the matching** Cursor project files in the **same turn** as code or config edits:
+
+- **Rules**: `.cursor/rules/*.mdc` (YAML frontmatter, concise body).
+- **Skills**: `.cursor/skills/<skill-name>/SKILL.md` (YAML frontmatter with `name` and `description`).
+
+**Do**
+
+- Prefer **editing existing** rules/skills; add a new file only for a clearly separate concern.
+- Keep content **actionable and short**; avoid duplicating the same guidance in many files.
+- If the user **explicitly** asks to record something in rules or skills, update those files even when no application code changes.
+
+**Do not**
+
+- Rewrite rules/skills on **every** message, or for **one-off** debugging, trivial fixes, or questions that do not affect ongoing conventions.

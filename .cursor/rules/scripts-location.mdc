@@ -1,0 +1,12 @@
+---
+description: Shared local tooling lives under local-env/ with stable subpaths
+alwaysApply: true
+---
+
+# Local environment tooling
+
+- **Shared scripts** (bash/sh used by **`just`**, local tooling, CI, or **copied into Docker images**) live under **`local-env/`** — not scattered under services.
+- **Service-specific scripts** live under their service folder (e.g. `web/scripts/`, `api-node/scripts/`, `api-rust/scripts/`) when they are only used by that service.
+- **Organize shared scripts by area**, e.g. `local-env/deps/`, `local-env/network/`, `local-env/notification/`, `local-env/storage/`.
+- **Docker**: when an image needs a shared script, keep build context at the repo root (`.`) and `COPY local-env/...` paths resolve. For service-only scripts, use the service folder path (e.g. `COPY web/scripts/...`).
+- **Exception**: do not embed large logic in `justfile` recipes beyond one-liners; prefer `local-env/...` or `<service>/scripts/...` for anything multi-line or maintainable.

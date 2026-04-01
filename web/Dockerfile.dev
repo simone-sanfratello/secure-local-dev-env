@@ -1,0 +1,29 @@
+# Next.js dev server: used by docker compose service `web-dev` (profile dev; bind-mount ./web).
+# Build with repo root context: `docker compose --profile dev build web-dev`
+# Node.js 24.14.1
+FROM node:24.14.1-bookworm-slim@sha256:06e5c9f86bfa0aaa7163cf37a5eaa8805f16b9acb48e3f85645b09d459fc2a9f
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends dumb-init \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
+
+COPY web/package.json web/pnpm-lock.yaml web/.npmrc ./
+RUN corepack prepare pnpm@10.33.0 --activate \
+  && pnpm install --frozen-lockfile
+
+# Turbopack/Next dev needs to create lockfiles and cache under `.next`.
+# When `/app/.next` is a named volume, Docker may initialize it from the image
+# only if the directory exists there. Pre-create with correct ownership.
+RUN mkdir -p /app/.next/cache/turbopack /app/.next/trace /app/.turbo || true
+
+COPY web/scripts/docker-entrypoint-dev.sh /usr/local/bin/docker-entrypoint-dev.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-dev.sh
+
+# Must match host mapping in docker-compose (e.g. 3001:3001); overridden by Compose `environment.PORT`.
+ARG PORT=3001
+ENV PORT=${PORT}
+EXPOSE ${PORT}
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/docker-entrypoint-dev.sh"]

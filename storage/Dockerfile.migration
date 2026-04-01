@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+# golang-migrate CLI. ENV: DATABASE_URL (required), MIGRATION_VERSION (optional),
+# MIGRATION_FORCE_VERSION (optional, for force subcommand).
+
+# golang-migrate 4.19.1
+# migrate image is Alpine/musl; pull dumb-init from the same family.
+FROM alpine:3.21 AS dumb-init
+RUN apk add --no-cache dumb-init
+
+FROM migrate/migrate:v4.19.1@sha256:cc4ad8e19d66791e3689405d9a028ce6e9614f32032db14acda1469f7201d6e4
+COPY --from=dumb-init /usr/bin/dumb-init /usr/bin/dumb-init
+
+COPY local-env/storage/migrate-entrypoint.sh /migrate-entrypoint.sh
+RUN chmod +x /migrate-entrypoint.sh
+
+COPY storage/migrations /migrations
+
+ENV DATABASE_URL=""
+ENV MIGRATION_VERSION=""
+ENV MIGRATION_FORCE_VERSION=""
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/migrate-entrypoint.sh"]

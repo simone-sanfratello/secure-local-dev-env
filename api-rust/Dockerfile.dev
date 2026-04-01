@@ -1,0 +1,44 @@
+# Rust dev with cargo-watch: bind-mount ./api-rust for hot reload.
+# Build with repo root context: `docker compose --profile dev build api-rust-dev`
+# Rust 1.94.1 (2026-03-25)
+FROM rust:1.94.1-bookworm@sha256:fdb91abf3cb33f1ebc84a76461d2472fd8cf606df69c181050fa7474bade2895
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends dumb-init gosu \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install cargo-watch for hot reload
+RUN cargo install cargo-watch
+
+# Switch to a non-root user for the dev process.
+# If named volumes (`api_rust_dev_target`, `api_rust_dev_cargo_registry`) were
+# created previously as root, you may need to recreate them to fix ownership.
+RUN groupadd -g 1000 app || true \
+  && useradd -u 1000 -g 1000 -m -s /bin/sh app || true \
+  && chown -R app:app /app
+
+# Warm dependency build in the image layer. A stub `main` compiles all deps into `target/`; then
+# `cargo clean -p api-rust` drops only this crate's artifacts so the named volume is not seeded
+# with a no-op `api-rust` binary (see docker-compose `api_rust_dev_target`).
+COPY api-rust/Cargo.toml api-rust/Cargo.lock ./
+
+# TODO download binaries only
+RUN mkdir -p src \
+  && echo "pub fn dummy() {}" > src/lib.rs \
+  && echo "fn main() {}" > src/main.rs \
+  && cargo build \
+  && cargo clean -p api-rust \
+  && rm -rf src
+
+COPY api-rust/scripts/docker-entrypoint-dev.sh /usr/local/bin/docker-entrypoint-dev.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-dev.sh
+
+ARG APP_PORT=4001
+ENV APP_PORT=${APP_PORT}
+EXPOSE ${APP_PORT}
+
+# PID 1 forwards SIGTERM/SIGINT to cargo-watch and its children (clean Docker stop).
+# Start as root so we can fix ownership of named volumes on boot, then drop to `app`.
+USER root
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/docker-entrypoint-dev.sh"]

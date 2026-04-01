@@ -1,0 +1,17 @@
+# One-off dependency changes inside Docker (isolated tooling; mutates bind-mounted web/ on the host).
+# Compose: service `web-deps` (profile `deps`). Or from repo root:
+#   docker compose --profile deps run --rm --build --user "$(id -u):$(id -g)" web-deps add zod
+# Or: just web-deps add zod
+# Node.js 24.14.1
+FROM node:24.14.1-bookworm-slim@sha256:06e5c9f86bfa0aaa7163cf37a5eaa8805f16b9acb48e3f85645b09d459fc2a9f
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends dumb-init git ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
+
+COPY local-env/deps/pnpm-entrypoint.sh /usr/local/bin/deps-entrypoint.sh
+RUN chmod +x /usr/local/bin/deps-entrypoint.sh
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/usr/local/bin/deps-entrypoint.sh"]

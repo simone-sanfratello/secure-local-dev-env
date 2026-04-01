@@ -1,0 +1,13 @@
+---
+description: Testing strategy—unit and integration for web and Rust
+globs: test/**/*
+alwaysApply: false
+---
+
+# Testing
+
+- **Frontend unit/component**: Vitest (or Jest) + Testing Library in `web/` when introduced.
+- **api-rust**: `#[cfg(test)]` in **`api-rust/`**; integration tests with `tower::ServiceExt` or HTTP; **PostgreSQL** test instance for persistence.
+- **api-node**: Vitest / **`pnpm run test`** in **`api-node/`** against Fastify or DB-backed helpers as the package defines.
+- **Docker (`just test`)**: **`web-test`** / **`api-node-test`** **`node:test`**; **`api-rust-test`** **`cargo test`** (in-process Axum **`/health`**); **`storage-test`** migrate checks.
+- **Flakes**: avoid bare timeouts; prefer deterministic assertions and async helpers over fixed sleeps.

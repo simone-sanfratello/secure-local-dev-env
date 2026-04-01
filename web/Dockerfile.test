@@ -1,0 +1,18 @@
+# Test: install deps + Biome lint. Build from repo root: docker build -f web/Dockerfile.test .
+# Node.js 24.14.1
+FROM node:24.14.1-bookworm-slim@sha256:06e5c9f86bfa0aaa7163cf37a5eaa8805f16b9acb48e3f85645b09d459fc2a9f
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends dumb-init \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
+
+COPY web/package.json web/pnpm-lock.yaml web/.npmrc ./
+RUN corepack prepare pnpm@10.33.0 --activate \
+  && pnpm install --frozen-lockfile
+
+COPY web/ ./
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["sh", "-c", "pnpm run test"]

@@ -1,0 +1,14 @@
+---
+description: Use the repo root justfile for common dev, test, and Docker commands
+globs: justfile
+alwaysApply: false
+---
+
+# Just (`justfile`)
+
+- Prefer **`just <recipe>`** at the repo root over retyping long `cd web && pnpm …` sequences when helping the user run tasks.
+- Run **`just`** with no arguments to list recipes.
+- **Bootstrap**: `just setup` installs root + `web/` + `test/` with frozen lockfiles (after Corepack enables pnpm `10.33.0`).
+- **`just reset`** runs **`docker compose down -v`** (drops named volumes; destructive).
+- **`just test`** runs Docker Compose **profile `test`** (**`web-test`** / **`api-node-test`** / **`api-rust-test`** / **`storage-test`**: lint/typecheck, **`node:test`** on web/api-node, **`cargo test`** on api-rust, migrate check).
+- Do not duplicate command lists from the `justfile` in rules; **change the `justfile`** when adding a new standard command, then mention the recipe name here only if needed.
