@@ -10,29 +10,29 @@ path = "src/lib.rs"
 name = "api-rust"
 path = "src/main.rs"
 
-# Integration tests live under `test/` (not Cargo’s default `tests/`).
+# Integration tests live under `test/` (not Cargo's default `tests/`).
 [[test]]
 name = "smoke"
 path = "test/smoke.rs"
 
 [dependencies]
-axum = { version = "0.8.4", features = ["macros", "json"] }
-chrono = { version = "0.4.41", features = ["serde"] }
-rand = "0.10.0"
-redis = { version = "0.32.7", features = ["tokio-comp"] }
-reqwest = { version = "0.12.24", default-features = false, features = [
+axum = { version = "=0.8.8", features = ["macros", "json"] }
+chrono = { version = "=0.4.44", features = ["serde"] }
+rand = "=0.10.0"
+redis = { version = "=0.32.7", features = ["tokio-comp"] }
+reqwest = { version = "=0.12.28", default-features = false, features = [
     "json",
     "rustls-tls",
 ] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
-thiserror = "2.0.12"
-tokio = { version = "1.45.0", features = ["full"] }
-tower-http = { version = "0.6.4", features = ["trace", "cors"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
-uuid = { version = "1.15.1", features = ["v4", "serde"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.149"
+thiserror = "=2.0.18"
+tokio = { version = "=1.50.0", features = ["full"] }
+tower-http = { version = "=0.6.8", features = ["trace", "cors"] }
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "json"] }
+uuid = { version = "=1.23.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
-http-body-util = "0.1.3"
-tower = { version = "0.5.2", features = ["util"] }
+http-body-util = "=0.1.3"
+tower = { version = "=0.5.3", features = ["util"] }
