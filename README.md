@@ -1,5 +1,10 @@
 # Secure local development environment
 
+This repository is the companion code for the article **[Securing Local Development Environment Against Dependency Supply Chain Attacks](https://simone-sanfratello.netlify.app/articles/securing-local-development-environment-against-dependency-supply-chain-attacks/)**.
+
+
+---
+
 Monorepo for a small full-stack app: a **Next.js** frontend (`web/`), a **Rust** HTTP API (`api-rust/`), a **Node** HTTP API (`api-node/`), **PostgreSQL** migrations (`storage/`), and **Docker Compose** wiring with filtered DNS, resource limits, and sandboxed containers.
 
 Day-to-day work stays inside Docker (hot reload on bind mounts). [just](https://github.com/casey/just) wraps Compose so you do not have to remember profiles and long `docker compose` lines.
